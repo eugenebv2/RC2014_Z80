@@ -1,9 +1,6 @@
-;********************
-;Some simple test code to write commands and data to a
+;Some simple test code to write commands and data to
 ;character LCD display
-;
 ;Tested with the Z80ASM assembler
-;********************
 BDOS	equ	05h
 
 	org 	0100H
@@ -43,23 +40,12 @@ lcd_cls 	equ 01h		;Clear the display
 hello_world:
 	db 	"Hello, world!",0
 
-
-;******************
-;Send a command byte to the LCD
-;Entry: A= command byte
-;Exit: All preserved
-;******************
 lcd_send_command:
 	push 	bc		;Preserve
   	out	(lcd_comm_port),a
 	pop 	bc		;Restore
 	ret
 
-;******************
-;Send a data byte to the LCD
-;Entry: A= data byte
-;Exit: All preserved
-;******************
 lcd_send_data:
 	push 	bc		;Preserve
 
@@ -67,11 +53,6 @@ lcd_send_data:
 	pop 	bc		;Restore
 	ret
 
-;******************
-;Send an asciiz string to the LCD
-;Entry: HL=address of string
-;Exit: HL=address of ending zero of the string. All others preserved
-;******************
 lcd_send_asciiz:
 	push 	af
 	push 	bc		;Preserve
@@ -106,6 +87,7 @@ nxt:    ld      a,(hl)          ;get char
 done:   pop     de              ;finished restore regs
         pop     bc
         ret
+		
 Delay:
         PUSH BC
         LD   B, 004fh    ; Outer loop counter
