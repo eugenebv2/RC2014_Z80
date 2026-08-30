@@ -1,0 +1,122 @@
+;********************
+;Some simple test code to write commands and data to a
+;character LCD display
+;
+;Tested with the Z80ASM assembler
+;********************
+BDOS	equ	05h
+
+	org 	0100H
+
+lcd_comm_port 	equ 0050H	;Port addresses. Change as needed.
+lcd_data_port 	equ 0051H
+
+lcd_set_8bit 	equ 3fH		;8-bit port, 2-line display
+lcd_cursor_on 	equ 0fh		;Turn cursors on
+lcd_cls 	equ 01h		;Clear the display
+
+	;Initialisation
+	ld 	hl,lcd_set_8bit
+	call 	lcd_send_command
+        call	Delay
+	ld 	hl,lcd_cursor_on
+	call 	lcd_send_command
+        call	Delay
+	ld 	hl,lcd_cls
+	call 	lcd_send_command
+        call	Delay
+
+	;Send a single character
+	ld 	a,'>'
+	call 	lcd_send_data
+        call	Delay
+
+	;Send a string to lcd
+	ld 	hl,hello_world
+	call 	lcd_send_asciiz
+        call	Delay
+	ld	hl,hello_world
+	call	_puts
+
+	ret
+
+hello_world:
+	db 	"Hello, world!",0
+
+
+;******************
+;Send a command byte to the LCD
+;Entry: A= command byte
+;Exit: All preserved
+;******************
+lcd_send_command:
+	push 	bc		;Preserve
+  	out	(lcd_comm_port),a
+	pop 	bc		;Restore
+	ret
+
+;******************
+;Send a data byte to the LCD
+;Entry: A= data byte
+;Exit: All preserved
+;******************
+lcd_send_data:
+	push 	bc		;Preserve
+
+	out 	(lcd_data_port),a 	;Send data
+	pop 	bc		;Restore
+	ret
+
+;******************
+;Send an asciiz string to the LCD
+;Entry: HL=address of string
+;Exit: HL=address of ending zero of the string. All others preserved
+;******************
+lcd_send_asciiz:
+	push 	af
+	push 	bc		;Preserve
+
+lcd_asciiz_char_loop
+	ld 	a,(hl)		;Get character
+	and 	a		;Is it zero?
+	jr 	z,lcd_asciiz_done	;If so, we're done
+
+	out 	(lcd_data_port),a		;Send data
+	inc 	hl		;Next char
+	call	Delay
+	jr 	lcd_asciiz_char_loop
+
+lcd_asciiz_done:
+	pop 	bc		;Restore
+	pop 	af
+	ret
+
+_puts:  push    bc              ;save our regs ready for bdos calls
+        push    de
+nxt:    ld      a,(hl)          ;get char
+        or      a               ;test if it's 0, end of msg
+        jr      z,done          ;yes so done
+        ld      e,a             ; set up call to BDOS to print a char
+        ld      c,2
+        push    hl              ;save text pointer
+        call    BDOS            ;print it
+        pop     hl
+        inc     hl              ;next char
+        jr      nxt             ;keep going
+done:   pop     de              ;finished restore regs
+        pop     bc
+        ret
+Delay:
+        PUSH BC
+        LD   B, 004fh    ; Outer loop counter
+OuterLoop:
+        LD   C, 004fh    ; Inner loop counter
+InnerLoop:
+        DEC  C           ; 4 T-states
+        JP   NZ, InnerLoop ; 10 T-states if jump taken, 10 if not
+        DEC  B           ; 4 T-states
+        JP   NZ, OuterLoop ; 10 T-states if jump taken
+        POP  BC
+
+        RET              ; Return from subroutine
+
