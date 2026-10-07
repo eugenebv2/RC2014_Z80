@@ -1,0 +1,100 @@
+; RC2014 Z80 CTC Example
+; Channel 0: Timer mode, periodic interrupts
+; Assembled with z80asm or similar assembler
+	.Z80
+	ORG 0100H
+BDOS	EQU 5H
+CTCPORT	EQU 88H
+LEDPORT EQU 00H
+
+; --- Vector Table Setup ---
+VECTOR_TABLE  EQU 9000h  ; Location in RAM for vector table
+VECTOR_ENTRY  EQU VECTOR_TABLE + 20h  ; Entry for CTC channel 0
+
+; -------------------------
+; Z80 Mode 2 Interrupt Setup
+; -------------------------
+start:
+        di                  ; Disable interrupts during setup
+        ld a, 02h         ; Set CPU to interrupt mode 2
+        im 2
+
+; Set up interrupt vector table for CTC
+;       ld hl, 8000h
+;       ld de, isrvector
+;       ld bc, 256*2
+;       ldir                ; Fill vector table with ISR address
+
+; Set up vector table entry for CTC
+    LD   HL, isrhandler
+    LD   (VECTOR_ENTRY), HL
+
+; Set I register to high byte of vector table address
+    LD   A, HIGH VECTOR_TABLE
+    LD   I, A
+
+; -------------------------
+; Configure CTC Channel 0
+; -------------------------
+; CTC base address depends on RC2014 configuration
+; Assume channel 0 control register at I/O port 0x80
+
+        ld a, 01000111b    ; Control word:
+                            ; Bit 7: Reset
+                            ; Bit 6: Timer mode (1)
+                            ; Bit 5: Trigger on software load (0)
+                            ; Bit 4: Prescale 256 (1)
+                            ; Bit 3: Interrupt enable (1)
+                            ; Bits 2-0: Channel number (0)
+        out (CTCPORT), a        ; Write control word
+
+        ld a, 100           ; Time constant (TC)
+                            ; Adjust for desired frequency
+        out (CTCPORT), a        ; Load TC into channel 0
+
+        ei                  ; Enable interrupts
+
+; -------------------------
+; Main Loop
+; -------------------------
+mainloop:
+	ld e,'.'
+	ld c, 2
+	call BDOS
+
+        ld b, 0ffh
+delay1:
+	ld d, 0ffh
+delay2:
+	dec d
+	jr nz, delay2
+	dec b
+	jr nz, delay1
+
+        jr mainloop
+
+; -------------------------
+; Interrupt Service Routine
+; -------------------------
+isrvector:
+        defw isrhandler   ; All entries point to ISR
+        defs (256*2 -2)
+
+isrhandler:
+        push af
+        push bc
+        push de
+        push hl
+
+        ; Example: Toggle bit on PIO or output port
+        ld a, 0FFh
+        out (LEDPORT), a    ; Example port write
+
+        pop hl
+        pop de
+        pop bc
+        pop af
+        ei                  ; Re-enable interrupts
+        reti                ; Return from interrupt
+
+

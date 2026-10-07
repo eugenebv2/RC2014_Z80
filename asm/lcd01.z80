@@ -1,0 +1,46 @@
+lcd_command 	equ 50h
+lcd_data	equ 51h
+
+	org	0100h
+	ld	a,3fh
+	out	(lcd_command),a
+	call	Delay
+	ld	a,0fh
+	out	(lcd_command),a
+	call	Delay
+	ld	a,01h
+	out	(lcd_command),a
+        call	Delay
+
+	ld	hl,message
+message_loop:
+	ld	a,(hl)
+	and 	a
+	jr	z,done
+
+	out	(lcd_data),a
+	call 	Delay
+	inc   	hl
+	jr	message_loop
+
+done:
+	ret
+
+message:
+ 	db ">Hello<",0
+
+Delay:
+        PUSH BC
+        LD   B, 00ffh    ; Outer loop counter
+OuterLoop:
+        LD   C, 00ffh    ; Inner loop counter
+InnerLoop:
+        DEC  C           ; 4 T-states
+        JP   NZ, InnerLoop ; 10 T-states if jump taken, 10 if not
+        DEC  B           ; 4 T-states
+        JP   NZ, OuterLoop ; 10 T-states if jump taken
+        POP  BC
+
+        RET              ; Return from subroutine
+
+

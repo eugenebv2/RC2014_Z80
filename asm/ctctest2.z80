@@ -1,0 +1,80 @@
+; CP/M CTC Interrupt Demo
+; Assemble with z80asm or sjasmplus
+; Run under CP/M ?returns cleanly to CCP
+	aseg
+        org     100h           ; CP/M transient program load address
+
+; ---------------------------
+; Program Entry
+; ---------------------------
+start:
+        ld      (oldsp), sp    ; Save CP/M's stack pointer
+        di                      ; Disable interrupts during setup
+
+        ; Save old IM mode vector (IM 1 uses address 0038h)
+        ld      a, (38h)
+        ld      (old38), a
+
+        ; ---------------------------
+        ; Configure CTC channel 0
+        ; ---------------------------
+        ; Control word: reset, enable interrupt, prescale=16, time constant follows
+        ld      a, 47h        ; 0100 0111b
+        out     (88h), a       ; Replace 0x00 with your CTC channel port
+
+        ld      a, 144          ; Time constant (adjust for desired rate)
+        out     (88h), a
+
+        im      1               ; Interrupt Mode 1
+        ei                      ; Enable interrupts
+
+        ; ---------------------------
+        ; Main loop ?wait for ticks
+        ; ---------------------------
+main_loop:
+	ld	a, (tick_count)
+        cp      100             ; Wait for 50 ticks
+        jr      c, main_loop
+
+        ; ---------------------------
+        ; Cleanup before returning
+        ; ---------------------------
+cleanup:
+        di                      ; Disable interrupts
+
+	; Stop CTC channel 0
+        ld      a, 07h
+        out     (88h), a
+
+       ; Restore old vector
+        ld      a, (old38)
+        ld      (38h), a
+
+        ld      sp, (oldsp)     ; Restore CP/M's stack pointer
+        in	a, (88h)	; Read status to clear
+
+        ld      C,0             ; Return directly to CCP
+        call    5
+        ret
+; ---------------------------
+; Interrupt Service Routine
+; ---------------------------
+isr:
+        push    af
+        ld      a, (tick_count)
+        inc     a
+        ld      (tick_count), a
+        pop     af
+        ei                      ; Allow nested interrupts if desired
+        reti
+
+; ---------------------------
+; Data storage
+; ---------------------------
+oldsp:      dw 0
+old38:      db 0
+tick_count: db 0
+msg:
+	DB 'count 100 ok',0ah,0dh,'$'
+        END
+

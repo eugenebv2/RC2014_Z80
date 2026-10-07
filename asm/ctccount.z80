@@ -1,0 +1,137 @@
+;-------------------------------------------------------
+; RC2014 Z80 CTC Interrupt Example (CP/M environment)
+;-------------------------------------------------------
+; CTC channel 0 at I/O port 0x88
+; Uses Interrupt Mode 2 with a custom vector table
+; Prints counter in hex via CP/M BDOS
+;-------------------------------------------------------
+
+    ORG 0100h          ; CP/M transient program start
+
+; --- Variables ---
+counter:    DEFW 0     ; 16-bit counter
+
+; --- CTC Registers ---
+CTC_BASE    EQU 88h
+CTC_CH0     EQU CTC_BASE + 0
+
+; --- Vector Table Setup ---
+VECTOR_TABLE  EQU 9000h  ; Location in RAM for vector table
+VECTOR_ENTRY  EQU VECTOR_TABLE + 20h; Entry for CTC channel 0
+
+    DI                  ; Disable interrupts during setup
+
+    ; Set up vector table entry for CTC
+    LD   HL, int_handler
+    LD   (VECTOR_ENTRY), HL
+
+    ; Set I register to high byte of vector table address
+    LD   A, HIGH VECTOR_TABLE
+    LD   I, A
+
+    IM   2              ; Enable Interrupt Mode 2
+
+; --- Configure CTC Channel 0 ---
+    LD   A, 047h       ; Control word: Enable, Reset, Time constant follows
+                        ; Mode 2 (Timer), Prescale 16, Interrupt enable
+    OUT  (CTC_CH0), A
+    LD   A, 50          ; Time constant (adjust for desired frequency)
+    OUT  (CTC_CH0), A
+
+    ; Set CTC interrupt vector byte (low byte of VECTOR_ENTRY address)
+    LD   A, LOW VECTOR_ENTRY
+    OUT  (CTC_CH0), A
+
+    EI                  ; Enable interrupts
+
+; --- Main Loop ---
+main_loop:
+    LD   HL, counter
+    CALL print_hex      ; Show counter value
+    CALL newline
+    CALL delay
+    JP   main_loop
+
+; --- Interrupt Handler ---
+int_handler:
+    PUSH AF
+    PUSH HL
+    LD   HL, counter
+    INC  (HL)           ; Increment low byte
+    JR   NZ, skip_high
+    INC  HL
+    INC  (HL)           ; Increment high byte
+skip_high:
+    POP  HL
+    POP  AF
+    EI                  ; Re-enable interrupts
+    RETI                ; Return from interrupt (IM 2)
+
+; --- Simple Delay ---
+delay:
+    LD   BC, 0FFFFh
+delay_loop:
+    DEC  BC
+    LD   A, B
+    OR   C
+    JP   NZ, delay_loop
+    RET
+
+; --- Print Hex (CP/M BDOS call) ---
+; HL = value to print
+print_hex:
+    PUSH HL
+    LD   A, H           ; High byte
+    CALL print_byte
+    LD   A, L           ; Low byte
+    CALL print_byte
+    POP  HL
+    RET
+
+; --- Print Byte in Hex ---
+print_byte:
+    PUSH AF
+    PUSH BC
+    LD   B, A           ; Save original byte
+    SRL  A              ; Shift right 4 bits
+    SRL  A
+    SRL  A
+    SRL  A              ; High nibble in A
+    CALL nibble_to_ascii
+    CALL bdos_print
+    LD   A, B           ; Restore original byte
+    AND  0Fh          ; Low nibble
+    CALL nibble_to_ascii
+    CALL bdos_print
+    POP  BC
+    POP  AF
+    RET
+
+; --- Convert nibble (0-15) to ASCII ---
+nibble_to_ascii:
+    ADD  A, '0'
+    CP   '9'+1
+    JR   C, nibble_done
+    ADD  A, 7           ; Adjust for 'A'-'F'
+nibble_done:
+    RET
+
+; --- BDOS Print Character ---
+bdos_print:
+    PUSH BC
+    LD   C, 2           ; BDOS function 2: console output
+    LD   E, A           ; Character in E
+    CALL 5              ; CP/M BDOS entry
+    POP  BC
+    RET
+
+; --- Newline ---
+newline:
+    LD   A, 0Dh         ; Carriage return
+    CALL bdos_print
+    LD   A, 0Ah         ; Line feed
+    CALL bdos_print
+    RET
+
+    END
+
