@@ -1,0 +1,91 @@
+; LEDCOUNT.ASM - CP/M 2.2 (8080 syntax for ASM.COM)
+; Counts 00h..FFh on LED port, loops forever at a human-friendly pace.
+; Press Q or q to exit; LEDs are cleared on exit.
+	
+LED     EQU 0000H      ; set to your LED I/O port (default 00h)
+BDOS    EQU 0005H
+;USERKEY EQU 80H
+;DPORT   EQU 0
+;CPORT   EQU 1
+
+        ORG 100H
+
+START:  DI
+        XRA  A
+        STA  CNT          ; start at 00h
+
+	MVI  C,9
+	LXI  D,MSG
+	CALL BDOS
+
+LOOP:
+        LDA  CNT
+        OUT  LED     ; display current count on LEDs
+        CALL DELAY        ; pacing
+
+        ; --- non-blocking key check (BDOS 6 with E=0FFh) ---
+;        CALL KEYCHECK     ; A = 0 if no key; else A = character
+	MVI  E, 0ffh
+        MVI  C, 6
+        CALL 5
+        XRA  A
+	JZ   NEXTVAL
+        ANI  5FH          ; normalize to UPPERCASE (clear bit 5)
+        CPI  051H         ; 'Q'
+	JNZ   NEXTVAL
+        JMP   QUIT
+
+NEXTVAL:
+        LDA  CNT
+        INR  A            ; 00..FF then wraps
+        STA  CNT
+        JMP  LOOP
+
+QUIT:
+        XRA  A            ; LEDs off on exit (for active-high LEDs)
+        OUT  LED
+        EI
+        RET
+
+; ------------------------------------------------------------
+; KEYCHECK: Non-blocking console read via BDOS 6, E=0FFh
+;   Returns: A=0 if no key ready; else A=character
+;   Preserves: B, D (so our delay loop stays stable)
+; ------------------------------------------------------------
+KEYCHECK:
+        PUSH B
+        PUSH D
+        MVI  C,06H          ; BDOS function 6: direct console I/O
+        MVI  E,0FFH       ; 0xFF => status/read: return char or 0 if none
+        CALL BDOS         ; returns char in A (or 0 if none)	
+;        MOV   L,A          ; save result while restoring regs
+        POP  D
+        POP  B
+;        MOV  A,L	; return char is in L
+	ORA A
+        JNZ  OUTKEY
+	MVI  C, 1
+	CALL BDOS
+
+OUTKEY:
+	RET
+
+; ------------------------------------------------------------
+; DELAY: Adjust B for speed (larger = slower)
+; Inner loop is 0xFF..0x00 for a smooth, visible count.
+; ------------------------------------------------------------
+DELAY:
+        MVI  B,0F0H        ; tweak to taste: 40h (faster) .. 90h (slower)
+D1:     MVI  C,0FFH
+D2:     DCR  C
+        JNZ  D2
+        DCR  B
+        JNZ  D1
+        RET
+
+; Data
+CNT:    DB   00H
+
+MSG:	DB   'Hello this a led test.',13,11,'$'
+        END  START
+
