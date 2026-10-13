@@ -1,0 +1,32 @@
+; Z80 CP/M Example: Read a key and display it
+; Assemble with: z80asm, asm80, or MAC under CP/M
+; Produces a .COM file starting at 0x100
+
+        org     100h        ; CP/M program load address
+
+start:
+        ; --- Read a character from console ---
+        ld      c, 1        ; BDOS function 1: CON_INPUT
+        call    5           ; Call BDOS
+        ld      b, a        ; Save character in B
+
+        ; --- Output a newline ---
+        ld      e, 0Dh      ; Carriage return
+        ld      c, 2        ; BDOS function 2: CON_OUTPUT
+        call    5
+        ld      e, 0Ah      ; Line feed
+        ld      c, 2
+        call    5
+
+        ; --- Display the character back ---
+        ld      e, b        ; Character to E
+        ld      c, 2        ; BDOS function 2: CON_OUTPUT
+        call    5
+
+        ; --- Exit to CP/M ---
+        ld      c, 0        ; BDOS function 0: System Reset (exit)
+        call    5
+
+        end     start
+
+
