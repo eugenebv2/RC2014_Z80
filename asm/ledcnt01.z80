@@ -1,0 +1,77 @@
+; Z80 CP/M Example: Non-blocking key read
+; Assemble with: z80asm, asm80, or MAC under CP/M
+; Produces a .COM file starting at 0x100
+
+        org     100h        ; CP/M program load address
+
+start:
+	or	a
+	ld	(hl), a
+
+	ld	de, msg
+	ld	c, 9
+	call	5
+
+check_key:
+	ld	a, (hl)
+	out	0, a
+	call	Delay
+
+        ld      e, 0FFh     ; 0FFh = check only, no wait
+        ld      c, 6        ; BDOS function 6: Direct Console I/O
+        call    5           ; Call BDOS
+        or      a           ; Sets Z flag if A == 0 (no key)
+        jr      z, no_key   ; Jump if no key pressed
+
+        ; --- Key was pressed ---
+        ld      b, a        ; Save character in B
+
+        ; Output newline
+        ld      e, 0Dh      ; CR
+        ld      c, 2
+        call    5
+        ld      e, 0Ah      ; LF
+        ld      c, 2
+        call    5
+
+        ; Output the key
+        ld      e, b
+        ld      c, 2
+        call    5
+
+	; turn off the led
+	or	a
+	out	0, a
+
+        ; Exit program
+        ld      c, 0
+        call    5
+
+no_key:
+        ; No key yet ?do something else or loop
+;	ld 	e, '.'
+;	ld 	c,2
+;	call	5
+
+	inc	(hl)
+
+        jr      check_key   ; Keep checking
+
+Delay:
+        PUSH BC
+        LD   B, 0000h    ; Outer loop counter
+OuterLoop:
+        LD   C, 00FFh    ; Inner loop counter
+InnerLoop:
+        DEC  C           ; 4 T-states
+        JP   NZ, InnerLoop ; 10 T-states if jump taken, 10 if not
+        DEC  B           ; 4 T-states
+        JP   NZ, OuterLoop ; 10 T-states if jump taken
+        POP  BC
+        RET              ; Return from subroutine
+
+msg:	DB 	' press any key to stop.','$'
+
+        end     start
+
+
