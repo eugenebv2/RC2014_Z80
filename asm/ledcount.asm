@@ -1,7 +1,8 @@
 ; LEDCOUNT.ASM - CP/M 2.2 (8080 syntax for ASM.COM)
 ; Counts 00h..FFh on LED port, loops forever at a human-friendly pace.
 ; Press Q or q to exit; LEDs are cleared on exit.
-	
+; Still have problem to get Q to stop.....
+
 LED     EQU 0000H      ; set to your LED I/O port (default 00h)
 BDOS    EQU 0005H
 ;USERKEY EQU 80H
