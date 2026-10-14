@@ -1,0 +1,177 @@
+	.Z80
+PORT_LED    EQU 00h        ; Digital I/O output port
+BDOS        EQU 0005h      ; CP/M BDOS entry point
+
+        ORG 0100h          ; CP/M program load address
+
+START:
+        CALL SHOW_MENU
+	OR   A
+	LD   (CNT), A		
+MAIN:
+        LD   A, 1           ; Default mode = Counting
+        LD   (MENU), A
+
+MAIN_LOOP:
+        LD   A, (MENU)
+        CP   1
+        CALL Z, MODE_COUNT
+        CP   2
+        CALL Z, MODE_ROTATE
+        CP   3
+        CALL Z, MODE_HEARTBEAT
+	CP   4
+	CALL Z, MODE_INVERT
+        JP   MAIN_LOOP
+
+; --- Mode 1: Counting LEDs ---
+MODE_COUNT:
+        LD   A, (CNT)
+COUNT_LOOP:
+        OUT  (PORT_LED), A
+        INC  A
+	LD   (CNT), A
+	CALL DELAY
+        CALL HANDLE_INPUT
+        RET
+
+; --- Mode 2: Rotating LEDs ---
+MODE_ROTATE:
+        LD   A, (CNT)
+ROTATE_LOOP:
+        OUT  (PORT_LED), A
+	RLCA
+	LD   (CNT), A
+        CALL DELAY
+        CALL HANDLE_INPUT
+        RET
+
+; --- Mode 3: Heartbeat ---
+MODE_HEARTBEAT:
+	LD   A, 10101010b
+        OUT  (PORT_LED), A
+        CALL SHORT_DELAY
+        CPL
+        OUT  (PORT_LED), A
+        CALL SHORT_DELAY
+        CALL HANDLE_INPUT
+        RET
+
+; --- Mode 4: Invert ---
+MODE_INVERT:
+	LD   A, 10101010b
+	OUT  (PORT_LED), A
+	CALL DELAY
+	LD   A, 01010101b
+	OUT  (PORT_LED), A
+	CALL DELAY
+	CALL HANDLE_INPUT
+	RET
+
+; --- Handle input instantly via CP/M ---
+HANDLE_INPUT:
+        LD   C, 6           ; BDOS function 6: Direct console I/O
+        LD   E, 0FFh        ; 0FFh = read without waiting
+        CALL BDOS
+        CP   0              ; No key pressed
+        RET  Z
+        CP   '1'
+        JR   Z, SET_COUNT
+        CP   '2'
+        JR   Z, SET_ROTATE
+        CP   '3'
+        JR   Z, SET_HEART
+	CP   '4'
+	JR   Z, SET_INVERT
+        CP   'q'
+        JR   Z, QUIT
+        RET
+
+SET_COUNT:
+        LD   A, 1
+        LD   (MENU), A
+	LD   A, 0
+	LD   (CNT), A
+        RET
+
+SET_ROTATE:
+        LD   A, 2
+        LD   (MENU), A
+	LD   A, 1
+	LD   (CNT), A
+        RET
+
+SET_HEART:
+        LD   A, 3
+        LD   (MENU), A
+	LD   A, 0aah
+	LD   (CNT), A
+        RET
+
+SET_INVERT:
+	LD   A, 4
+	LD   (MENU), A
+	RET
+
+QUIT:
+        XOR  A
+        OUT  (PORT_LED), A
+	LD   C, 0
+	CALL BDOS
+        RET                 ; Return to CP/M
+
+; --- Show menu via CP/M ---
+SHOW_MENU:
+	PUSH BC
+	PUSH DE
+        LD   HL, MENU_TEXT
+SEND_LOOP:
+        LD   A, (HL)
+        OR   A
+        JR   Z, DONE
+        LD   C, 2           ; BDOS function 2: Output char
+        LD   E, A
+        PUSH HL
+	CALL BDOS
+	POP  HL
+        INC  HL
+        JR   SEND_LOOP
+DONE:
+	POP  DE
+	POP  BC
+	RET
+
+MENU_TEXT:
+        DB "RC2014 LED Control (CP/M)",13,10
+        DB "Press 1: Counting LEDs",13,10
+        DB "Press 2: Rotating LEDs",13,10
+        DB "Press 3: Heartbeat LEDs",13,10
+	DB "Press 4: Invert LEDs",13,10
+        DB "Press Q: Quit",13,10,0
+
+; --- Delays ---
+DELAY:
+	PUSH BC
+        LD   BC, 0FFFFh
+D1:     DEC  BC
+        LD   A, B
+        OR   C
+        JR   NZ, D1
+	POP  BC
+        RET
+
+SHORT_DELAY:
+	PUSH BC
+        LD   BC, 8000h
+SD1:    DEC  BC
+        LD   A, B
+        OR   C
+        JR   NZ, SD1
+	POP  BC
+        RET
+
+MENU:	DB   0
+CNT:	DB   0
+
+	END
+
