@@ -1,0 +1,808 @@
+;;; i2c_lcd.asm
+;;; I2C LCD Control demo for sc126 
+;;; 
+;;; 2024/2/17 by morecat_lab
+;;; 
+;;; NOTE:
+;;; 1. this program is based on api of Small Computer Monitor (SCM)
+;;; 
+;;; https://smallcomputercentral.com/small-computer-monitor/
+;;; 
+;;; 2. use 'sjasm' for assemble
+;;; 
+;;; https://github.com/Konamiman/Sjasm
+;;;
+;;; 3. target of this program is based on PCF8574(T), in 4bit mode for i2c interface
+;;; 
+;;;     ---Connection table---
+;;; 	PCF8574T   	LCD
+;;;     --------        ---
+;;; 	P7		DB7
+;;; 	P6		DB6
+;;; 	P5		DB5
+;;; 	P4		DB4
+;;; 	P3		(NOT USED, or Backlight switch ?)
+;;; 	P2		Enable
+;;; 	P1		R/W
+;;; 	P0		RS
+;;;
+	
+;DEFINE  SC_DEFAULT          ;Default I2C port at I/O address 0x0C
+;#DEFINE    SC137_20            ;SC137 I2C module at address 0x20
+
+BDOS	EQU 05h
+I2CLCD	EQU 27h
+I2CLCD_ADDR EQU I2CLCD * 2	; LCD Controller address (write)
+
+; Memory space
+CODE    EQU  0100h        ;Program code starts here
+DATA    EQU  9000h        ;Data starts here
+
+
+; Main program
+
+	ORG  CODE          ;Program starts at this address
+
+        LD   HL,.Msg1        ;Address of message string
+        CALL StrOut         ;Output string
+            
+	CALL LCD_INIT	; Initialize LCD
+	CALL LCD_BKL
+;	CALL HELLO
+
+        RET
+
+.Msg1:   DB  "i2c_lcd test program",0Dh,0Ah,0
+
+HELLO:
+	LD HL,.Msg2
+	CALL LCD_STRING
+	RET
+	
+.Msg2:	DB  "Hello World!",0
+
+;;;
+;;;   HL, Pointer to string, 0 terminated
+;;; 
+LCD_STRING:
+	LD A,(HL)
+	OR A
+	RET Z
+	CALL I2C_SLCD8D
+	INC HL
+	JP LCD_STRING
+
+;;;
+LCD_BKL:
+	LD A, 00001000b
+	CALL I2C_SLCD8
+	CALL Delay
+	RET
+;;; Initialize LED
+;;; 
+LCD_INIT:
+	;; delay 100ms before send command
+	;LD   DE, 100
+	;CALL API_Delay
+	CALL Delay
+	;; function set  8bit mode (Need to repeat 3 times)
+	LD   A, 00110000b   ; 1
+	CALL I2C_SLCD4
+	
+	LD   A, 00110000b   ; 2
+	CALL I2C_SLCD4
+
+	LD   A, 00110000b   ; 3
+	CALL I2C_SLCD4
+
+	;; function set 4bit mode
+	LD   A, 00100000b   ; set 4bit mode
+	CALL I2C_SLCD4
+
+	;; set two column mode
+	LD   A, 00101000b   ; 0x28
+	CALL I2C_SLCD8
+
+	;; set display on, cursor on, blink on
+;	LD   A, 00001111b   ; display, cursor, blink on
+	LD   A, 00001100b   ; only display on
+	CALL I2C_SLCD8
+
+	;; clear display (1.53ms)
+	LD   A, 00000001b   ; 0x01
+	CALL I2C_SLCD8
+	CALL Delay
+
+	;; entry mode
+	LD   A, 00000110b   ; 0x06
+	CALL I2C_SLCD8
+
+	LD   A, 0FFh
+	CALL I2C_SLCD8
+
+	RET
+
+	;; home cursor (1.53ms)
+HOME:	
+	LD   A, 00000010b
+	CALL I2C_SLCD8
+	CALL Delay
+
+MOV_1L:	LD  A,10000000b
+	JP  I2C_SLCD8
+
+MOV_2L:	LD  A,11000000b
+	JP  I2C_SLCD8
+
+;;; 
+;;; I2C Send LCD command (RS=0)
+;;; 
+
+;;; 
+;;; 4bit write data  (RS=0)
+;;; 
+
+I2C_SLCD4:	; 4bit write command is only apply for initialize LCD
+	PUSH AF
+	LD   A, I2CLCD_ADDR	;open I2C
+        CALL I2C_Open       	;Open I2C device for write
+        JR   NZ,.fail      	;Abort if failed to open
+
+	POP  AF
+	AND  11110000b	;send higher nibble only
+	PUSH AF
+	CALL I2C_Write
+
+	POP  AF
+	OR   00000100b	; P2(E) ->H
+	PUSH AF
+	CALL I2C_Write
+
+	POP  AF
+	AND  11111011b	; P2(E) ->L
+	CALL I2C_Write
+	OR   A
+	RET
+
+.fail:
+	POP AF
+	LD  HL,.Msg3
+	CALL StrOut
+	XOR A
+	RET
+
+.Msg3	DB  "i2c device is not found",0dh,0ah,0
+
+;;; 
+;;; 8bit write command  (RS=0)
+;;; 
+I2C_SLCD8:			; 8bit write command
+	PUSH AF
+	PUSH AF
+	LD   A, I2CLCD_ADDR	;open I2C
+        CALL I2C_Open       	;Open I2C device for write
+        JR   NZ, .fail1      	;Abort if failed to open
+
+	POP  AF
+	AND  11110000b	;higher nibble
+	PUSH AF
+	CALL I2C_Write
+
+	POP  AF
+	OR   00000100b	; P2(E) ->H
+	PUSH AF
+	CALL I2C_Write
+
+	POP  AF
+	AND  11111011b	; P2(E) ->L
+	CALL I2C_Write
+
+	POP  AF		;lower nibble
+	SLA  A
+	SLA  A
+	SLA  A
+	SLA  A
+	PUSH AF
+	CALL I2C_Write
+
+	POP  AF
+	OR   00000100b	; P2(E) ->H
+	PUSH AF
+	CALL I2C_Write
+
+	POP  AF
+	AND  11111011b	; P2(E) ->L
+	CALL I2C_Write
+
+        JP   I2C_Close      ;Close I2C device 
+.fail1:
+	POP  AF
+	POP  AF
+	RET
+	
+;;; 
+;;; 8bit write data  (RS=1)
+;;; 
+I2C_SLCD8D:	
+	PUSH AF
+	PUSH AF
+	LD   A, I2CLCD_ADDR	;open I2C
+        CALL I2C_Open       	;Open I2C device for write
+        JR   NZ, .fail2      	;Abort if failed to open
+	
+	POP  AF
+	AND  11110000b	;higher nibble
+	OR   00000001b	; P0(RS) ->H
+	PUSH AF
+	CALL I2C_Write
+
+	POP  AF
+	OR   00000101b	; P2(E) ->H
+	PUSH AF
+	CALL I2C_Write
+
+	POP  AF
+	AND  11111011b	; P2(E) ->L
+	CALL I2C_Write
+
+	POP  AF		;lower nibble
+	SLA  A
+	SLA  A
+	SLA  A
+	SLA  A
+	AND  11110000b	;higher nibble
+	OR   00000001b	; P0(RS) ->H
+	PUSH AF
+	CALL I2C_Write
+
+	POP  AF
+	OR   00000100b	; P2(E) ->H
+	PUSH AF
+	CALL I2C_Write
+
+	POP  AF
+	AND  11111011b	; P2(E) ->L
+	CALL I2C_Write
+
+        JP   I2C_Close      ;Close I2C device 
+
+.fail2:
+	POP AF
+	POP AF
+	RET
+
+	OR   A
+	RET
+
+;;; This library is written by Stephen C Cousins @https://smallcomputercentral.com
+
+; **********************************************************************
+; **  I2C demo       v2.1.0  26-Feb-2021        by Stephen C Cousins  **
+; **********************************************************************
+	
+; **********************************************************************
+; Utility functions
+
+; Test if device is present.
+;   On entry: A = Address of device on I2C bus (write address)
+;   On exit:  Z flagged if device found, NZ if not found
+;             IX IY preserved
+Test:       CALL I2C_Open       ;Open I2C device for write
+            RET  NZ             ;Abort if failed to open
+            PUSH AF
+            CALL I2C_Close      ;Close I2C device 
+            POP  AF
+            RET
+
+
+; Output string at DE with substitutions
+;   On entry: A = Address of device on I2C bus (write address)
+;             DE = Address of null terminated string
+;             H = Value to substitute for $H
+;             L = Value to substitute for $L
+;             B = Value to substitute for $B
+;   On exit:  DE = Address of next location after this string
+;             IX IY preserved
+String:     LD   A,(DE)         ;Get character from string
+            INC  DE             ;Point to next character in string
+            OR   A              ;Null ?
+            RET  Z              ;Yes, so we're done
+            CP   '$'            ;Substitue value?
+            JR   Z,.Subst       ;Yes, so go handle substitution
+            CALL CharOut        ;Output character to console
+            JR   String         ;Go get next character from string
+.Subst:     LD   A,(DE)         ;Get character from string
+            INC  DE             ;Point to next character in string
+            OR   A              ;Null ?
+            RET  Z              ;Yes, so we're done
+            CP   'H'            ;Register H
+            JR   NZ,.NotH       ;No, so skip
+            LD   A,H            ;Get value 'H'
+            JR   .GotIt         ;Go output it in hex
+.NotH:      CP   'L'            ;Register L
+            JR   NZ,.NotL       ;No, so skip
+            LD   A,L            ;Get value 'L'
+            JR   .GotIt         ;Go output it in hex
+.NotL:      CP   'B'            ;Register B
+            JR   NZ,.NotB       ;No, so skip
+            LD   A,B            ;Get value 'L'
+            ;JR   .GotIt        ;Go output it in hex
+.GotIt:     CALL HexOut         ;Output write address in hex
+.NotB:      JR   String         ;Go get next character from string
+
+
+; Display device report, ie.
+;   SC407 Switches and Lights Module at Write=<XX> Read=<XX+1>
+;         <demo/test> result
+;   On entry: A = Address of device on I2C bus (write address)
+;             DE = Address of null terminated string
+;   On exit:  AF preserved (Z flagged if device founf)
+;             IX IY preserved
+Report:     LD   H,A            ;Store device write address
+            INC  A              ;Increment to read address
+            LD   L,A            ;Store device read address
+            CALL String         ;Output start of supplied string (at DE)
+            LD   DE,.Address    ;Point to string
+            CALL String         ;Output "Write="
+            CALL LineOut        ;Output new line
+            LD   A,H            ;Get device write address
+            CALL Test           ;Test if device is present
+            RET  Z              ;Return if device found
+            LD   DE,.NotFound   ;Point ot string
+            CALL Result         ;Output "<indent>Device not found"
+            CALL LineOut        ;Output new line
+            RET
+.Address:   DB  " at Write=$H Read=$L",0
+.NotFound:  DB  "Device not found",0
+
+
+; Display test result
+;   On entry: DE = Address of null terminated string
+;             H = First value ($H)
+;             L = Second value ($L)
+;   On exit:  HL IX IY preserved
+Result:     PUSH BC
+            LD   B,6            ;Size of indent in characters
+.Loop:      CALL SpaceOut       ;Output indent (spaces) to console
+            DJNZ .Loop          ;Repeat 'B' times
+            POP  BC
+            JP   String         ;Output result string to console
+
+
+; Character output to console
+;   On entry: A = Character to be output
+;   On exit:  BC DE HL IX IY preserved
+CharOut:    JP   API_Cout
+
+; New line output to console
+;   On entry: No parameters required
+;   On exit:  BC DE HL IX IY preserved
+;LineOut:    JP   API_Lout
+
+LineOut:
+	PUSH   BC
+	PUSH   DE
+	LD     E, 13
+	LD     C, 2
+	CALL   BDOS
+        LD     E, 10
+        LD     C, 2
+        CALL   BDOS
+        POP    DE
+        POP    BC
+	RET
+
+; Space character ouput to console
+;   On entry: No parameters required
+;   On exit:  BC DE HL IX IY preserved
+;SpaceOut:   LD   A,0x20
+;            JP   API_Cout
+
+SpaceOut:
+	PUSH   BC
+	PUSH   DE
+	LD     E, ' '
+	LD     C, 2
+	CALL   BDOS
+	POP    DE
+	POP    BC
+	RET
+
+; String output to console
+;   On entry: DE = Address of string
+;   On exit:  BC DE HL IX IY preserved
+;StrOut:     JP   API_Sout
+
+StrOut:	push	bc		;save our regs ready for bdos calls
+	push	de
+nxt:	ld	a,(hl)		;get char
+	or	a		;test if it's 0, end of msg
+	jr	z,done		;yes so done
+	ld      e,a		; set up call to BDOS to print a char
+        ld      c,2
+        push    hl		;save text pointer
+        call    BDOS		;print it
+        pop     hl
+        inc     hl		;next char
+        jr      nxt		;keep going
+done:	pop	de		;finished restore regs
+	pop	bc
+	ret			;and return
+
+; Hex byte output to console
+;   On entry: A = Byte to be output in hex
+;   On exit:  BC DE HL IX IY preserved
+HexOut:     PUSH AF             ;Preserve byte to be output
+            RRA                 ;Shift top nibble to
+            RRA                 ;  botom four bits..
+            RRA
+            RRA
+            AND  0Fh           ;Mask off unwanted bits
+            CALL .Hex           ;Output hi nibble
+            POP  AF             ;Restore byte to be output
+            AND  0Fh           ;Mask off unwanted bits
+; Output nibble as ascii character
+.Hex:       CP   0Ah           ;Nibble > 10 ?
+            JR   C,.Skip        ;No, so skip
+            ADD  A,7            ;Yes, so add 7
+.Skip:      ADD  A,30h         ;Add ASCII '0'
+            JP   API_Cout       ;Write character
+
+
+; **********************************************************************
+; Small computer monitor API
+
+; Delay by DE milliseconds (approx)
+;   On entry: DE = Delay time in milliseconds
+;   On exit:  BC DE HL IX IY preserved
+;API_Delay:  PUSH BC             ;Preserve registers
+;            PUSH DE
+;            PUSH HL
+;            LD   C,0x0A         ;API 0x0A = Delay by DE milliseconds
+;            RST  0x30           ;Call API
+;            POP  HL             ;Restore registers
+;            POP  DE
+;            POP  BC
+;            RET
+
+; Character output to console device
+;   On entry: A = Character to be output
+;   On exit:  BC DE HL IX IY preserved
+API_Cout:   PUSH BC             ;Preserve registers
+            PUSH DE
+            PUSH HL
+;            LD   C,0x02         ;API 0x02 = Character output
+;            RST  0x30           ;Call API
+            LD   E, A
+            LD   C, 2
+            CALL BDOS
+            POP  HL             ;Restore registers
+            POP  DE
+            POP  BC
+            RET
+
+
+; New line output to console device
+;   On entry: No parameters required
+;   On exit:  BC DE HL IX IY preserved
+;API_Lout:   PUSH BC             ;Preserve registers
+;            PUSH DE
+;            PUSH HL
+;            LD   C,0x07         ;API 0x07 = New line output
+;            RST  0x30           ;Call API
+;            POP  HL             ;Restore registers
+;            POP  DE
+;            POP  BC
+;            RET
+
+; String output to console device
+;   On entry: DE = Address of string
+;   On exit:  BC DE HL IX IY preserved
+;API_Sout:   PUSH BC             ;Preserve registers
+;            PUSH DE
+;            PUSH HL
+;            LD   C,0x06         ;API 0x06 = String output
+;            RST  0x30           ;Call API
+;            POP  HL             ;Restore registers
+;            POP  DE
+;            POP  BC
+;            RET
+
+
+; **********************************************************************
+; I2C support functions
+
+; I2C bus open device
+;   On entry: A = Device address (bit zero is read flag)
+;             SCL = unknown, SDA = unknown
+;   On exit:  If successfully A = 0 and Z flagged
+;             If unsuccessfully A = Error and NZ flagged
+;             BC DE HL IX IY preserved
+I2C_Open:   PUSH AF
+            CALL I2C_Start      ;Output start condition
+            POP  AF
+            JR   I2C_Write      ;Write data byte
+
+
+; I2C bus close device
+;   On entry: SCL = unknown, SDA = unknown
+;   On exit:  If successfully A=0 and Z flagged
+;             If unsuccessfully A=Error and NZ flagged
+;             SCL = hi, SDA = hi
+;             BC DE HL IX IY preserved
+I2C_Close:  JP   I2C_Stop       ;Output stop condition
+
+
+; **********************************************************************
+; **********************************************************************
+; I2C bus master driver
+; **********************************************************************
+; **********************************************************************
+
+; Functions provided are:
+;     I2C_Start
+;     I2C_Stop
+;     I2C_Read
+;     I2C_Write
+;
+; This code has delays between all I/O operations to ensure it works
+; with the slowest I2C devices
+;
+; I2C transfer sequence
+;   +-------+  +---------+  +---------+     +---------+  +-------+
+;   | Start |  | Address |  | Data    | ... | Data    |  | Stop  |
+;   |       |  | frame   |  | frame 1 |     | frame N |  |       |
+;   +-------+  +---------+  +---------+     +---------+  +-------+
+;
+;
+; Start condition                     Stop condition
+; Output by master device             Output by master device
+;       ----+                                      +----
+; SDA       |                         SDA          |
+;           +-------                        -------+
+;       -------+                                +-------
+; SCL          |                      SCL       |
+;              +----                        ----+
+;
+;
+; Address frame
+; Clock and data output from master device
+; Receiving device outputs acknowledge 
+;        +-----+-----+-----+-----+-----+-----+-----+-----+     +---+
+; SDA    | A 7 | A 6 | A 5 | A 4 | A 3 | A 2 | A 1 | R/W | ACK |   |
+;     ---+-----+-----+-----+-----+-----+-----+-----+-----+-----+   +---
+;          +-+   +-+   +-+   +-+   +-+   +-+   +-+   +-+   +-+
+; SCL      | |   | |   | |   | |   | |   | |   | |   | |   | |
+;     -----+ +---+ +---+ +---+ +---+ +---+ +---+ +---+ +---+ +---------
+;
+;
+; Data frame 
+; Clock output by master device
+; Data output by transmitting device
+; Receiving device outputs acknowledge 
+;        +-----+-----+-----+-----+-----+-----+-----+-----+     +---+
+; SDA    | D 7 | D 6 | D 5 | D 4 | D 3 | D 2 | D 1 | D 0 | ACK |   |
+;     ---+-----+-----+-----+-----+-----+-----+-----+-----+-----+   +---
+;          +-+   +-+   +-+   +-+   +-+   +-+   +-+   +-+   +-+
+; SCL      | |   | |   | |   | |   | |   | |   | |   | |   | |
+;     -----+ +---+ +---+ +---+ +---+ +---+ +---+ +---+ +---+ +---------
+;
+
+
+; **********************************************************************
+; I2C constants
+
+
+; I2C bus master interface
+; The default device option is for SC126 or compatible
+;IFDEF      SC_DEFAULT
+;DEFINE     SC126
+;ENDIF
+;IFDEF      SC126
+I2C_PORT:   EQU 0Ch           ;Host I2C port address
+I2C_SDA_WR: EQU 7              ;Host I2C write SDA bit number
+I2C_SDA_RD: EQU 7              ;Host I2C read SDA bit number
+I2C_SCL_WR: EQU 0              ;Host I2C write SCL bit number
+;2C_SCL_RD: EQU 0              ;Host I2C read SCL bit number (not supported)
+I2C_QUIES:  EQU 10001101b      ;Host I2C control port quiescent value
+;ENDIF
+;IFDEF      SC137_20
+;I2C_PORT:   EQU 0x20           ;Host I2C port address
+;I2C_SDA_WR: EQU 7              ;Host I2C write SDA bit number
+;I2C_SDA_RD: EQU 7              ;Host I2C read SDA bit number
+;I2C_SCL_WR: EQU 0              ;Host I2C write SCL bit number
+;I2C_SCL_RD: EQU 0              ;Host I2C read SCL bit number 
+;I2C_QUIES:  EQU 10000001b      ;Host I2C output port quiescent value
+;ENDIF
+
+; I2C support constants
+ERR_NONE:   EQU 0              ;Error = None
+ERR_JAM:    EQU 1              ;Error = Bus jammed [not used]
+ERR_NOACK:  EQU 2              ;Error = No ackonowledge
+ERR_TOUT:   EQU 3              ;Error = Timeout
+
+
+; **********************************************************************
+; Hardware dependent I2C bus functions
+
+
+; I2C bus transmit frame (address or data)
+;   On entry: A = Data byte, or
+;                 Address byte (bit zero is read flag)
+;             SCL = low, SDA = low
+;   On exit:  If successful A=0 and Z flagged
+;                SCL = lo, SDA = lo
+;             If unsuccessful A=Error and NZ flagged
+;                SCL = high, SDA = high, I2C closed
+;             BC DE HL IX IY preserved
+I2C_Write:  PUSH BC             ;Preserve registers
+            PUSH DE
+            LD   D,A            ;Store byte to be written
+            LD   B,8            ;8 data bits, bit 7 first
+.Wr_Loop:   RL   D              ;Test M.S.Bit
+            JR   C,.Bit_Hi      ;High, so skip
+            CALL I2C_SDA_LO     ;SDA low   (SCL lo, SDA = data bit)
+            JR   .Bit_Clk
+.Bit_Hi:    CALL I2C_SDA_HI     ;SDA high  (SCL lo, SDA = data bit)
+.Bit_Clk:   CALL I2C_SCL_HI     ;SCL high  (SCL hi, SDA = data bit)
+            CALL I2C_SCL_LO     ;SCL low   (SCL lo, SDA = data bit)
+            DJNZ .Wr_Loop
+; Test for acknowledge from slave (receiver)
+; On arriving here, SCL = lo, SDA = data bit
+            CALL I2C_SDA_HI     ;SDA high  (SCL lo, SDA hi/ack)
+            CALL I2C_SCL_HI     ;SCL high  (SCL hi, SDA hi/ack)
+            CALL I2C_RdPort     ;Read SDA input
+            LD   B,A
+            CALL I2C_SCL_LO     ;SCL low   (SCL lo, SDA = hi)
+            BIT  I2C_SDA_RD,B
+            JR   NZ,.NoAck      ;Skip if no acknowledge
+            POP  DE             ;Restore registers
+            POP  BC
+            XOR  A              ;Return success A=0 and Z flagged
+            RET
+; I2C STOP required as no acknowledge
+; On arriving here, SCL = lo, SDA = hi
+.NoAck:     CALL I2C_SDA_LO     ;SDA low   (SCL lo, SDA = lo)
+            CALL I2C_SCL_HI     ;SCL high  (SCL hi, SDA = lo)
+            CALL I2C_SDA_HI     ;SDA low   (SCL hi, SDA = hi)
+            POP  DE             ;Restore registers
+            POP  BC
+            LD   A,ERR_NOACK    ;Return error = No Acknowledge
+            OR   A              ;  and NZ flagged
+            RET
+
+
+; I2C bus receive frame (data)
+;   On entry: A = Acknowledge flag
+;               If A != 0 the read is acknowledged
+;             SCL low, SDA low
+;   On exit:  If successful A = data byte and Z flagged
+;               SCL = low, SDA = low
+;             If unsuccessul* A = Error and NZ flagged
+;               SCL = low, SDA = low
+;             BC DE HL IX IY preserved
+; *This function always returns successful
+I2C_Read:   PUSH BC             ;Preserve registers
+            PUSH DE
+            LD   E,A            ;Store acknowledge flag
+            LD   B,8            ;8 data bits, 7 first
+            CALL I2C_SDA_HI     ;SDA high  (SCL lo, SDA hi/input)
+.Rd_Loop:   CALL I2C_SCL_HI     ;SCL high  (SCL hi, SDA hi/input)
+            CALL I2C_RdPort     ;Read SDA input bit
+            SCF                 ;Set carry flag
+            BIT  I2C_SDA_RD,A   ;SDA input high?
+            JR   NZ,.Rotate     ;Yes, skip with carry flag set
+            CCF                 ;Clear carry flag
+.Rotate:    RL   D              ;Rotate result into D
+            CALL I2C_SCL_LO     ;SCL low   (SCL lo, SDA hi/input)
+            DJNZ .Rd_Loop       ;Repeat for all 8 bits
+; Acknowledge input byte
+; On arriving here, SCL = lo, SDA = hi/input
+            LD   A,E            ;Get acknowledge flag
+            OR   A              ;A = 0? (indicates no acknowledge)
+            JR   Z,.NoAck1       ;Yes, so skip acknowledge
+            CALL I2C_SDA_LO     ;SDA low   (SCL lo, SDA lo)
+.NoAck1:     CALL I2C_SCL_HI     ;SCL hi    (SCL hi, SDA lo)
+            CALL I2C_SCL_LO     ;SCL low   (SCL lo, SDA lo)
+            LD   A,D            ;Get data byte received
+            POP  DE             ;Restore registers
+            POP  BC
+            CP   A              ;Return success Z flagged
+            RET
+
+
+; I2C bus start
+;   On entry: SCL = unknown, SDA = unknown
+;   On exit:  SCL = low, SDA = low
+;             A = 0 and Z flagged as we always succeed
+;             BC DE HL IX IY preserved
+; First ensure SDA and SCL are high
+I2C_Start:  CALL I2C_INIT       ;Initialise I2C control port
+;           CALL I2C_SCL_HI     ;SCL high  (SCL hi, SDA ??)
+;           CALL I2C_SDA_HI     ;SDA high  (SCL hi, SDA hi)
+; Generate I2C start condition
+            CALL I2C_SDA_LO     ;SDA low   (SCL hi, SDA lo)
+            CALL I2C_SCL_LO     ;SCL low   (SCL lo, SDA lo)
+            XOR  A              ;Return success A=0 and Z flagged
+            RET
+
+
+; I2C bus stop 
+;   On entry: SCL = unknown, SDA = unknown
+;   On exit:  SCL = high, SDA = high
+;             A = 0 and Z flagged as we always succeed
+;             BC DE HL IX IY preserved
+; First ensure SDA and SCL are low
+I2C_Stop:   CALL I2C_SDA_LO     ;SDA low   (SCL hi, SDA lo)
+            CALL I2C_SCL_LO     ;SCL low   (SCL lo, SDA lo)
+; Generate stop condition
+            CALL I2C_SCL_HI     ;SCL high  (SCL hi, SDA lo)
+            CALL I2C_SDA_HI     ;SDA low   (SCL hi, SDA hi)
+            XOR  A              ;Return success A=0 and Z flagged
+            RET
+
+
+; **********************************************************************
+; I2C bus simple I/O functions
+;   On entry: No parameters required
+;   On exit:  BC DE HL IX IY preserved
+
+I2C_INIT:   LD   A,I2C_QUIES    ;I2C control port quiescent value
+            JR   I2C_WrPort
+
+I2C_SCL_HI: LD   A,(I2C_RAMCPY)
+            SET  I2C_SCL_WR,A
+            JR   I2C_WrPort
+
+I2C_SCL_LO: LD   A,(I2C_RAMCPY)
+            RES  I2C_SCL_WR,A
+            JR   I2C_WrPort
+
+I2C_SDA_HI: LD   A,(I2C_RAMCPY)
+            SET  I2C_SDA_WR,A
+            JR   I2C_WrPort
+
+I2C_SDA_LO: LD   A,(I2C_RAMCPY)
+            RES  I2C_SDA_WR,A
+            ;JR   I2C_WrPort
+
+I2C_WrPort: PUSH BC             ;Preserve registers
+            LD   B,0            ;Set up BC for 16-bit
+            LD   C,I2C_PORT     ;  I/O address of I2C port
+            OUT  (C),A          ;Write A to I2C I/O port
+            LD   (I2C_RAMCPY),A ;Write A to RAM copy
+            POP  BC             ;Restore registers
+            RET
+
+I2C_RdPort: PUSH BC             ;Preserve registers
+            LD   B,0            ;Set up BC for 16-bit
+            LD   C,I2C_PORT     ;  I/O address of I2C port
+            IN   A,(C)          ;Read A from I/O port
+            POP  BC             ;Restore registers
+            RET
+
+
+; **********************************************************************
+; I2C workspace / variables in RAM
+
+Delay:
+        PUSH BC
+        LD   B, 004fh    ; Outer loop counter
+OuterLoop:
+        LD   C, 004fh    ; Inner loop counter
+InnerLoop:
+        DEC  C           ; 4 T-states
+        JP   NZ, InnerLoop ; 10 T-states if jump taken, 10 if not
+        DEC  B           ; 4 T-states
+        JP   NZ, OuterLoop ; 10 T-states if jump taken
+        POP  BC
+
+        RET              ; Return from subroutine
+
+            ORG  DATA
+
+I2C_RAMCPY: DB  0              ;RAM copy of output port
+
+RESULTS:    DB  0              ;Large block of results can start here
+
+
