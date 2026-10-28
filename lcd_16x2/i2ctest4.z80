@@ -47,8 +47,8 @@ DATA    EQU  9000h        ;Data starts here
         CALL StrOut         ;Output string
             
 	CALL LCD_INIT	; Initialize LCD
-	CALL LCD_BKL
-;	CALL HELLO
+;	CALL LCD_BKL
+	CALL HELLO
 
         RET
 
@@ -74,10 +74,10 @@ LCD_STRING:
 
 ;;;
 LCD_BKL:
-	LD A, 00001000b
+	LD A, 01000000b
 	CALL I2C_SLCD8
-	CALL Delay
 	RET
+;;;
 ;;; Initialize LED
 ;;; 
 LCD_INIT:
@@ -88,13 +88,13 @@ LCD_INIT:
 	;; function set  8bit mode (Need to repeat 3 times)
 	LD   A, 00110000b   ; 1
 	CALL I2C_SLCD4
-	
+	CALL Delay
 	LD   A, 00110000b   ; 2
 	CALL I2C_SLCD4
-
+        CALL Delay
 	LD   A, 00110000b   ; 3
 	CALL I2C_SLCD4
-
+        CALL Delay
 	;; function set 4bit mode
 	LD   A, 00100000b   ; set 4bit mode
 	CALL I2C_SLCD4
@@ -108,16 +108,13 @@ LCD_INIT:
 	LD   A, 00001100b   ; only display on
 	CALL I2C_SLCD8
 
-	;; clear display (1.53ms)
+;	;; clear display (1.53ms)
 	LD   A, 00000001b   ; 0x01
 	CALL I2C_SLCD8
 	CALL Delay
 
-	;; entry mode
+;	;; entry mode
 	LD   A, 00000110b   ; 0x06
-	CALL I2C_SLCD8
-
-	LD   A, 0FFh
 	CALL I2C_SLCD8
 
 	RET
@@ -805,4 +802,4 @@ I2C_RAMCPY: DB  0              ;RAM copy of output port
 
 RESULTS:    DB  0              ;Large block of results can start here
 
-
+
