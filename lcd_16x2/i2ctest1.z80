@@ -96,14 +96,15 @@ SC405:      LD   A,SC405_ADDR   ;I2C device address
             LD   H,00110000b    ;Prepare all bits low
             CALL @Write         ;Write data byte to device
 ;            CALL @Read          ;Read data byte from device
-            LD   HL,@Test1       ;Address of message string
-            CALL StrOut         ;Display test result indented
-            CALL LineOut        ;Output new line
+;            CALL LineOut
+;            LD   HL,@Test1       ;Address of message string
+;            CALL StrOut         ;Display test result indented
+;            CALL LineOut        ;Output new line
             CALL Delay
             CALL Delay
             LD   H, 00110000b
             CALL @Write
-            CALL @Delay
+            CALL Delay
             LD   H, 00110000b
             CALL @Write
             CALL Delay
@@ -116,12 +117,13 @@ SC405:      LD   A,SC405_ADDR   ;I2C device address
             LD   H, 00011000b
             CALL @Write
             CALL Delay
-            LD   H, 00001010b
+            LD   H, 00001110b
             CALL @Write
 ;            CALL @Read          ;Read data byte from device
-            LD   HL,@Test1       ;Address of message string
-            CALL StrOut         ;Display test result indented
-            CALL LineOut        ;Output new line
+;            CALL LineOut
+;            LD   HL,@Test1       ;Address of message string
+;            CALL StrOut         ;Display test result indented
+;            CALL LineOut        ;Output new line
             CALL Delay
 
             RET
@@ -559,4 +561,4 @@ D1:     DEC  BC
         RET
 
         END
-
+
