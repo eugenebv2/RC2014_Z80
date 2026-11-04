@@ -38,6 +38,10 @@ SC605 Digital I/O<br/>
 
 [def2]: images/IMG_6735.jpg
 
+SC704 I2C Bus master connect I2C LCD 16x2 address 0x27
+
+<br/>Example assembly reference from https://gist.github.com/kuwatay/540bc0a180f993153ca4545b15af0fcf and modified ./asm/i2ctest6.z80 compiler using z80asm <br/>
+
 ![alt text][def3]
 
 [def3]: images/IMG_6888.jpg
