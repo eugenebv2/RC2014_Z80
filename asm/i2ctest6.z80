@@ -1,12 +1,8 @@
-;;; 1. this program is based on api of Small Computer Monitor (SCM)
-;;; 
+;;;
 ;;; https://smallcomputercentral.com/small-computer-monitor/
 ;;; 
-;;; 2. target of this program is based on PCF8574(T), in 4bit mode for i2c interface
+;;; target of this program is based on PCF8574(T), in 4bit mode for i2c interface
 ;;; 
-
-;DEFINE  SC_DEFAULT          ;Default I2C port at I/O address 0x0C
-;DEFINE  SC137_20            ;SC137 I2C module at address 0x20
 
 BDOS	EQU 05h
 I2CLCD	EQU 27h
@@ -15,7 +11,6 @@ I2CLCD_ADDR EQU I2CLCD * 2	; LCD Controller address (write)
 ; Memory space
 CODE    EQU  0100h        ;Program code starts here
 DATA    EQU  9000h        ;Data starts here
-
 
 ; Main program
 
@@ -59,10 +54,10 @@ LCD_INIT:
 	CALL Delay
 	LD   A, 00110000b   ; 2
 	CALL I2C_SLCD4
-        CALL Delay
+    CALL Delay
 	LD   A, 00110000b   ; 3
 	CALL I2C_SLCD4
-        CALL Delay
+    CALL Delay
 	;; function set 4bit mode
 	LD   A, 00100000b   ; set 4bit mode
 	CALL I2C_SLCD4
@@ -104,8 +99,8 @@ MOV_2L:	LD  A,11000000b
 
 LCD_BK_ON:                                                                
 	LD  A, I2CLCD_ADDR
-        CALL I2C_OPEN
-        RET  NZ
+    CALL I2C_OPEN
+    RET  NZ
 	LD   A, 0
 	OR   08h 
 	CALL I2C_WRITE
@@ -124,8 +119,8 @@ LCD_BK_ON:
 I2C_SLCD4:	; 4bit write command is only apply for initialize LCD
 	PUSH AF
 	LD   A, I2CLCD_ADDR	;open I2C
-        CALL I2C_Open       	;Open I2C device for write
-        JR   NZ,.fail      	;Abort if failed to open
+    CALL I2C_Open       	;Open I2C device for write
+    JR   NZ,.fail      	;Abort if failed to open
 
 	POP  AF
 	AND  11110000b	;send higher nibble only
@@ -159,8 +154,8 @@ I2C_SLCD8:			; 8bit write command
 	PUSH AF
 	PUSH AF
 	LD   A, I2CLCD_ADDR	;open I2C
-        CALL I2C_Open       	;Open I2C device for write
-        JR   NZ, .fail1      	;Abort if failed to open
+    CALL I2C_Open       	;Open I2C device for write
+    JR   NZ, .fail1      	;Abort if failed to open
 
 	POP  AF
 	AND  11110000b	;higher nibble
@@ -206,8 +201,8 @@ I2C_SLCD8D:
 	PUSH AF
 	PUSH AF
 	LD   A, I2CLCD_ADDR	;open I2C
-        CALL I2C_Open       	;Open I2C device for write
-        JR   NZ, .fail2      	;Abort if failed to open
+    CALL I2C_Open       	;Open I2C device for write
+    JR   NZ, .fail2      	;Abort if failed to open
 	
 	POP  AF
 	AND  11110000b	;higher nibble
@@ -364,11 +359,11 @@ LineOut:
 	LD     E, 13
 	LD     C, 2
 	CALL   BDOS
-        LD     E, 10
-        LD     C, 2
-        CALL   BDOS
-        POP    DE
-        POP    BC
+    LD     E, 10
+    LD     C, 2
+    CALL   BDOS
+    POP    DE
+    POP    BC
 	RET
 
 ; Space character ouput to console
@@ -398,12 +393,12 @@ nxt:	ld	a,(hl)		;get char
 	or	a		;test if it's 0, end of msg
 	jr	z,done		;yes so done
 	ld      e,a		; set up call to BDOS to print a char
-        ld      c,2
-        push    hl		;save text pointer
-        call    BDOS		;print it
-        pop     hl
-        inc     hl		;next char
-        jr      nxt		;keep going
+    ld      c,2
+    push    hl		;save text pointer
+    call    BDOS		;print it
+    pop     hl
+    inc     hl		;next char
+    jr      nxt		;keep going
 done:	pop	de		;finished restore regs
 	pop	bc
 	ret			;and return
