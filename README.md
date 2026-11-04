@@ -37,3 +37,7 @@ SC605 Digital I/O<br/>
 ![alt text][def2]
 
 [def2]: images/IMG_6735.jpg
+
+![alt text][def3]
+
+[def3]: images/IMG_6888.jpg
