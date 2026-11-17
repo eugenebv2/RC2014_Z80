@@ -48,6 +48,6 @@ SC704 I2C Bus master connect I2C LCD 16x2 address 0x27
 
 # RC2014_Z180
 
-![alt text][def2]
+![alt text][def4]
 
-[def2]: images/CIMG0026.jpg
+[def4]: images/CIMG0026.jpg
