@@ -50,4 +50,4 @@ SC704 I2C Bus master connect I2C LCD 16x2 address 0x27
 
 ![alt text][def4]
 
-[def4]: images/CIMG0026.jpg
+[def4]: images/CIMG0026.JPG
